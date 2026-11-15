@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { validateProductModelBytes } from "@/lib/product-model";
+import { MAX_PRODUCT_IMAGE_BYTES } from "@/lib/upload-limits";
 
-const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 export const MAX_PRODUCT_MODEL_BYTES = 25 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const ALLOWED_MODEL_EXTENSIONS = new Set(["glb", "gltf"]);
@@ -195,7 +195,7 @@ async function readBoundedModelResponse(response: Response): Promise<Uint8Array>
 }
 
 async function validateProductImage(file: File) {
-  if (file.size < 1 || file.size > MAX_IMAGE_BYTES) {
+  if (file.size < 1 || file.size > MAX_PRODUCT_IMAGE_BYTES) {
     throw new ImageStorageError("Choose an image smaller than 4 MB.", 413);
   }
   if (!ALLOWED_IMAGE_TYPES.has(file.type)) {

@@ -7,6 +7,7 @@ import type { Product } from "@/types/product";
 import { CATEGORY_LABELS, GENDER_LABELS, SIZES } from "@/types/product";
 import { formatPrice } from "@/lib/format";
 import { validateProductModelBytes } from "@/lib/product-model";
+import { MAX_PRODUCT_IMAGE_BYTES } from "@/lib/upload-limits";
 import type { AdminOrder } from "@/services/admin";
 
 type AdminProduct = Product;
@@ -470,6 +471,10 @@ function NewProductForm({ onCreated, onError }: { onCreated: () => Promise<void>
       onError("Choose a product photo before creating this product.");
       return;
     }
+    if (!isProductImageSizeValid(imageFile)) {
+      onError("Choose an image no larger than 4 MB.");
+      return;
+    }
     setBusy(true);
     try {
       const body = new FormData();
@@ -485,8 +490,8 @@ function NewProductForm({ onCreated, onError }: { onCreated: () => Promise<void>
         method: "POST",
         body,
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Could not add product.");
+      const data = await readImageUploadResponse(response, "Could not add product.");
+      if (typeof data.id !== "string") throw new Error("The server returned an invalid response. Please try again.");
       let modelError: string | null = null;
       if (modelFile) {
         try {
@@ -538,14 +543,51 @@ function NewProductForm({ onCreated, onError }: { onCreated: () => Promise<void>
 }
 
 async function uploadProductImage(productId: string, file: File) {
+  if (!isProductImageSizeValid(file)) {
+    throw new Error("Choose an image no larger than 4 MB.");
+  }
   const body = new FormData();
   body.set("image", file);
   const response = await fetch(`/api/admin/products/${encodeURIComponent(productId)}/image`, {
     method: "POST",
     body,
   });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error ?? "Could not upload this product image.");
+  await readImageUploadResponse(response, "Could not upload this product image.");
+}
+
+function isProductImageSizeValid(file: File) {
+  return file.size > 0 && file.size <= MAX_PRODUCT_IMAGE_BYTES;
+}
+
+async function readImageUploadResponse(response: Response, fallbackError: string) {
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+  if (!contentType.includes("json")) {
+    const body = await response.text();
+    if (response.status === 413 || /request entity too large|payload too large/i.test(body)) {
+      throw new Error("The upload is too large for the server. Choose an image no larger than 4 MB.");
+    }
+    throw new Error(response.ok
+      ? "The upload service returned an unexpected response. Please try again."
+      : `Image upload failed (HTTP ${response.status}). Please try again.`);
+  }
+
+  let data: unknown;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error("The upload service returned an invalid response. Please try again.");
+  }
+  if (!isRecord(data)) {
+    throw new Error("The upload service returned an invalid response. Please try again.");
+  }
+  if (!response.ok) {
+    throw new Error(typeof data.error === "string" ? data.error : fallbackError);
+  }
+  return data;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 async function uploadProductModel(productId: string, file: File) {

@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { isAdminRequest, isSameOrigin } from "@/lib/admin-auth";
+import { MAX_PRODUCT_IMAGE_BYTES } from "@/lib/upload-limits";
 import { updateAdminProductImage } from "@/services/admin";
 import { ImageStorageError, uploadProductImage } from "@/services/cloudinary";
 
@@ -10,7 +11,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   if (!isSameOrigin(req)) return Response.json({ error: "Request rejected." }, { status: 403 });
 
   const contentLength = Number(req.headers.get("content-length") ?? 0);
-  if (contentLength > 4 * 1024 * 1024 + 64 * 1024) {
+  if (contentLength > MAX_PRODUCT_IMAGE_BYTES + 64 * 1024) {
     return Response.json({ error: "Choose an image smaller than 4 MB." }, { status: 413 });
   }
 
